@@ -48,6 +48,11 @@ private:
 	EAction m_eAction;
 	EFileType m_eFileType;
 	UString m_sFileName;
+	UString m_sDirName;
+	UString m_sLuaFileName;
+	UString m_sBackupFileName;
+	bool m_bUnite;
+	bool m_bSplit;
 	bool m_bVerbose;
 	UString m_sMessage;
 };

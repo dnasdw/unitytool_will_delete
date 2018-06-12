@@ -2,20 +2,25 @@
 
 CUnityTool::SOption CUnityTool::s_Option[] =
 {
-	{ nullptr, 0, USTR("action:") },
 	{ USTR("extract"), USTR('x'), USTR("extract the target file") },
 	{ USTR("create"), USTR('c'), USTR("create the target file") },
-	{ USTR("help"), USTR('h'), USTR("show this help") },
-	{ nullptr, 0, USTR("\ncommon:") },
 	{ USTR("type"), USTR('t'), USTR("[assetbundle|assets]\n\t\tthe type of the file, optional") },
-	{ USTR("file"), USTR('f'), USTR("the target file, required") },
+	{ USTR("file"), USTR('f'), USTR("the target file") },
+	{ USTR("dir"), USTR('d'), USTR("the dir for the target file") },
+	{ USTR("lua"), USTR('l'), USTR("the metadata file for the target file") },
+	{ USTR("backup"), USTR('b'), USTR("the backup binary file for the target file") },
+	{ USTR("unite"), 0, USTR("unite from the .splitN files") },
+	{ USTR("split"), 0, USTR("split to the .splitN files") },
 	{ USTR("verbose"), USTR('v'), USTR("show the info") },
+	{ USTR("help"), USTR('h'), USTR("show this help") },
 	{ nullptr, 0, nullptr }
 };
 
 CUnityTool::CUnityTool()
 	: m_eAction(kActionNone)
 	, m_eFileType(kFileTypeUnknown)
+	, m_bUnite(false)
+	, m_bSplit(false)
 	, m_bVerbose(false)
 {
 }
@@ -98,10 +103,28 @@ int CUnityTool::CheckOptions()
 		UPrintf(USTR("ERROR: nothing to do\n\n"));
 		return 1;
 	}
-	if (m_eAction != kActionHelp && m_sFileName.empty())
+	if (m_eAction != kActionHelp)
 	{
-		UPrintf(USTR("ERROR: no --file option\n\n"));
-		return 1;
+		if (m_sFileName.empty())
+		{
+			UPrintf(USTR("ERROR: no --file option\n\n"));
+			return 1;
+		}
+		if (m_sDirName.empty())
+		{
+			UPrintf(USTR("ERROR: no --dir option\n\n"));
+			return 1;
+		}
+		if (m_sLuaFileName.empty())
+		{
+			UPrintf(USTR("ERROR: no --lua option\n\n"));
+			return 1;
+		}
+		if (m_sBackupFileName.empty())
+		{
+			UPrintf(USTR("ERROR: no --backup option\n\n"));
+			return 1;
+		}
 	}
 	return 0;
 }
@@ -190,10 +213,6 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(const UChar* a_pName, in
 			return kParseOptionReturnOptionConflict;
 		}
 	}
-	else if (UCscmp(a_pName, USTR("help")) == 0)
-	{
-		m_eAction = kActionHelp;
-	}
 	else if (UCscmp(a_pName, USTR("type")) == 0)
 	{
 		if (a_nIndex + 1 >= a_nArgc)
@@ -223,9 +242,53 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(const UChar* a_pName, in
 		}
 		m_sFileName = a_pArgv[++a_nIndex];
 	}
+	else if (UCscmp(a_pName, USTR("dir")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sDirName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("lua")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sLuaFileName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("backup")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sBackupFileName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("unite")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_bUnite = true;
+	}
+	else if (UCscmp(a_pName, USTR("split")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_bSplit = true;
+	}
 	else if (UCscmp(a_pName, USTR("verbose")) == 0)
 	{
 		m_bVerbose = true;
+	}
+	else if (UCscmp(a_pName, USTR("help")) == 0)
+	{
+		m_eAction = kActionHelp;
 	}
 	return kParseOptionReturnSuccess;
 }
