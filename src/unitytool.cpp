@@ -1,4 +1,5 @@
 #include "unitytool.h"
+#include "assetbundle.h"
 
 CUnityTool::SOption CUnityTool::s_Option[] =
 {
@@ -307,7 +308,64 @@ bool CUnityTool::extractFile()
 			m_fpAssets = nullptr;
 		}
 	}
-	// TODO
+	bool bUnityRaw = false;
+	bool bUnityWeb = false;
+	bool bUnityFS = false;
+	m_fpAssets = UFopen(m_sFileName.c_str(), USTR("rb"));
+	if (m_fpAssets == nullptr)
+	{
+		return false;
+	}
+	Fseek(m_fpAssets, 0, SEEK_END);
+	n64 nAssetsSize = Ftell(m_fpAssets);
+	do
+	{
+		if (nAssetsSize >= 9)
+		{
+			Fseek(m_fpAssets, 0, SEEK_SET);
+			char szSignature[9] = {};
+			fread(szSignature, 1, 9, m_fpAssets);
+			if (strcmp(szSignature, "UnityRaw") == 0)
+			{
+				bUnityRaw = true;
+				break;
+			}
+			if (strcmp(szSignature, "UnityWeb") == 0)
+			{
+				bUnityWeb = true;
+				break;
+			}
+		}
+		if (nAssetsSize >= 8)
+		{
+			Fseek(m_fpAssets, 0, SEEK_SET);
+			char szSignature[8] = {};
+			fread(szSignature, 1, 8, m_fpAssets);
+			if (strcmp(szSignature, "UnityFS") == 0)
+			{
+				bUnityFS = true;
+				break;
+			}
+		}
+	} while (false);
+	if (bUnityRaw)
+	{
+		fclose(m_fpAssets);
+		m_fpAssets = nullptr;
+		CAssetBundle assetBundle;
+		assetBundle.SetFileName(m_sFileName);
+		assetBundle.SetDirName(m_sDirName);
+		assetBundle.SetLuaFileName(m_sLuaFileName);
+		assetBundle.SetBackupFileName(m_sBackupFileName);
+		assetBundle.SetVerbose(m_bVerbose);
+		bResult = assetBundle.ExtractFile();
+	}
+	else
+	{
+		// TODO
+		fclose(m_fpAssets);
+		m_fpAssets = nullptr;
+	}
 	return bResult;
 }
 
