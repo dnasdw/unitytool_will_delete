@@ -4,7 +4,6 @@ CUnityTool::SOption CUnityTool::s_Option[] =
 {
 	{ USTR("extract"), USTR('x'), USTR("extract the target file") },
 	{ USTR("create"), USTR('c'), USTR("create the target file") },
-	{ USTR("type"), USTR('t'), USTR("[assetbundle|assets]\n\t\tthe type of the file, optional") },
 	{ USTR("file"), USTR('f'), USTR("the target file") },
 	{ USTR("dir"), USTR('d'), USTR("the dir for the target file") },
 	{ USTR("lua"), USTR('l'), USTR("the metadata file for the target file") },
@@ -18,7 +17,6 @@ CUnityTool::SOption CUnityTool::s_Option[] =
 
 CUnityTool::CUnityTool()
 	: m_eAction(kActionNone)
-	, m_eFileType(kFileTypeUnknown)
 	, m_bUnite(false)
 	, m_bSplit(false)
 	, m_bVerbose(false)
@@ -62,9 +60,6 @@ int CUnityTool::ParseOptions(int a_nArgc, UChar* a_pArgv[])
 				case kParseOptionReturnNoArgument:
 					UPrintf(USTR("ERROR: no argument\n\n"));
 					return 1;
-				case kParseOptionReturnUnknownArgument:
-					UPrintf(USTR("ERROR: unknown argument \"%") PRIUS USTR("\"\n\n"), m_sMessage.c_str());
-					return 1;
 				case kParseOptionReturnOptionConflict:
 					UPrintf(USTR("ERROR: option conflict\n\n"));
 					return 1;
@@ -82,9 +77,6 @@ int CUnityTool::ParseOptions(int a_nArgc, UChar* a_pArgv[])
 				return 1;
 			case kParseOptionReturnNoArgument:
 				UPrintf(USTR("ERROR: no argument\n\n"));
-				return 1;
-			case kParseOptionReturnUnknownArgument:
-				UPrintf(USTR("ERROR: unknown argument \"%") PRIUS USTR("\"\n\n"), m_sMessage.c_str());
 				return 1;
 			case kParseOptionReturnOptionConflict:
 				UPrintf(USTR("ERROR: option conflict\n\n"));
@@ -211,27 +203,6 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(const UChar* a_pName, in
 		else if (m_eAction != kActionCreate && m_eAction != kActionHelp)
 		{
 			return kParseOptionReturnOptionConflict;
-		}
-	}
-	else if (UCscmp(a_pName, USTR("type")) == 0)
-	{
-		if (a_nIndex + 1 >= a_nArgc)
-		{
-			return kParseOptionReturnNoArgument;
-		}
-		UChar* pType = a_pArgv[++a_nIndex];
-		if (UCscmp(pType, USTR("assetbundle")) == 0)
-		{
-			m_eFileType = kFileTypeAssetBundle;
-		}
-		else if (UCscmp(pType, USTR("assets")) == 0)
-		{
-			m_eFileType = kFileTypeAssets;
-		}
-		else
-		{
-			m_sMessage = pType;
-			return kParseOptionReturnUnknownArgument;
 		}
 	}
 	else if (UCscmp(a_pName, USTR("file")) == 0)

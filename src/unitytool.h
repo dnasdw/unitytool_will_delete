@@ -11,7 +11,6 @@ public:
 		kParseOptionReturnSuccess,
 		kParseOptionReturnIllegalOption,
 		kParseOptionReturnNoArgument,
-		kParseOptionReturnUnknownArgument,
 		kParseOptionReturnOptionConflict
 	};
 	enum EAction
@@ -20,12 +19,6 @@ public:
 		kActionExtract,
 		kActionCreate,
 		kActionHelp
-	};
-	enum EFileType
-	{
-		kFileTypeUnknown,
-		kFileTypeAssetBundle,
-		kFileTypeAssets
 	};
 	struct SOption
 	{
@@ -46,7 +39,6 @@ private:
 	bool extractFile();
 	bool createFile();
 	EAction m_eAction;
-	EFileType m_eFileType;
 	UString m_sFileName;
 	UString m_sDirName;
 	UString m_sLuaFileName;
@@ -54,7 +46,6 @@ private:
 	bool m_bUnite;
 	bool m_bSplit;
 	bool m_bVerbose;
-	UString m_sMessage;
 };
 
 #endif	// UNITYTOOL_H_
