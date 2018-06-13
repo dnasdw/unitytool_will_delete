@@ -20,11 +20,17 @@ CUnityTool::CUnityTool()
 	, m_bUnite(false)
 	, m_bSplit(false)
 	, m_bVerbose(false)
+	, m_fpAssets(nullptr)
 {
 }
 
 CUnityTool::~CUnityTool()
 {
+	if (m_fpAssets != nullptr)
+	{
+		fclose(m_fpAssets);
+		m_fpAssets = nullptr;
+	}
 }
 
 int CUnityTool::ParseOptions(int a_nArgc, UChar* a_pArgv[])
@@ -239,18 +245,10 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(const UChar* a_pName, in
 	}
 	else if (UCscmp(a_pName, USTR("unite")) == 0)
 	{
-		if (a_nIndex + 1 >= a_nArgc)
-		{
-			return kParseOptionReturnNoArgument;
-		}
 		m_bUnite = true;
 	}
 	else if (UCscmp(a_pName, USTR("split")) == 0)
 	{
-		if (a_nIndex + 1 >= a_nArgc)
-		{
-			return kParseOptionReturnNoArgument;
-		}
 		m_bSplit = true;
 	}
 	else if (UCscmp(a_pName, USTR("verbose")) == 0)
@@ -279,12 +277,73 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(int a_nKey, int& a_nInde
 bool CUnityTool::extractFile()
 {
 	bool bResult = false;
+	if (m_bUnite)
+	{
+		for (int i = 0; ; i++)
+		{
+			UString sSplitFileName = Format(USTR("%") PRIUS USTR(".split%d"), m_sFileName.c_str(), i);
+			FILE* fpSplit = UFopen(sSplitFileName.c_str(), USTR("rb"), false);
+			if (fpSplit == nullptr)
+			{
+				break;
+			}
+			Fseek(fpSplit, 0, SEEK_END);
+			n64 nSplitSize = Ftell(fpSplit);
+			if (m_fpAssets == nullptr)
+			{
+				m_fpAssets = UFopen(m_sFileName.c_str(), USTR("wb"));
+				if (m_fpAssets == nullptr)
+				{
+					fclose(fpSplit);
+					return false;
+				}
+			}
+			CopyFile(m_fpAssets, fpSplit, 0, nSplitSize);
+			fclose(fpSplit);
+		}
+		if (m_fpAssets != nullptr)
+		{
+			fclose(m_fpAssets);
+			m_fpAssets = nullptr;
+		}
+	}
+	// TODO
 	return bResult;
 }
 
 bool CUnityTool::createFile()
 {
 	bool bResult = false;
+	bool bAssetBundle = false;
+	// TODO
+	if (!bAssetBundle && m_bSplit)
+	{
+		m_fpAssets = UFopen(m_sFileName.c_str(), USTR("rb"));
+		if (m_fpAssets == nullptr)
+		{
+			return false;
+		}
+		Fseek(m_fpAssets, 0, SEEK_END);
+		n64 nAssetsSize = Ftell(m_fpAssets);
+		const n64 nSplitSize = 0x100000;
+		int nSplitCount = static_cast<int>(Align(nAssetsSize, nSplitSize) / nSplitSize);
+		for (int i = 0; i < nSplitCount; i++)
+		{
+			UString sSplitFileName = Format(USTR("%") PRIUS USTR(".split%d"), m_sFileName.c_str(), i);
+			FILE* fpSplit = UFopen(sSplitFileName.c_str(), USTR("wb"));
+			if (fpSplit == nullptr)
+			{
+				fclose(m_fpAssets);
+				m_fpAssets = nullptr;
+				return false;
+			}
+			n64 nSize = min<n64>(nSplitSize, nAssetsSize - i * nSplitSize);
+			CopyFile(fpSplit, m_fpAssets, i * nSplitSize, nSize);
+			fclose(fpSplit);
+		}
+		fclose(m_fpAssets);
+		m_fpAssets = nullptr;
+	}
 	return bResult;
 }
 

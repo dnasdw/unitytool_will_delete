@@ -46,6 +46,7 @@ private:
 	bool m_bUnite;
 	bool m_bSplit;
 	bool m_bVerbose;
+	FILE* m_fpAssets;
 };
 
 #endif	// UNITYTOOL_H_
