@@ -1,4 +1,6 @@
 #include "unitytool.h"
+#include "assetbundle.h"
+#include "assets.h"
 
 CUnityTool::SOption CUnityTool::s_Option[] =
 {
@@ -22,6 +24,7 @@ CUnityTool::CUnityTool()
 	, m_bUnite(false)
 	, m_bSplit(false)
 	, m_bVerbose(false)
+	, m_eFileType(kFileTypeUnknown)
 {
 }
 
@@ -118,6 +121,14 @@ int CUnityTool::CheckOptions()
 		{
 			UPrintf(USTR("ERROR: no --backup option\n\n"));
 			return 1;
+		}
+		if (m_eAction == kActionExtract)
+		{
+			if (!checkFileType())
+			{
+				UPrintf(USTR("ERROR: %") PRIUS USTR("\n\n"), m_sMessage.c_str());
+				return 1;
+			}
 		}
 	}
 	return 0;
@@ -293,6 +304,25 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(int a_nKey, int& a_nInde
 	return kParseOptionReturnIllegalOption;
 }
 
+bool CUnityTool::checkFileType()
+{
+	if (CAssetBundle::IsAssetBundleFile(m_sFileName))
+	{
+		m_eFileType = kFileTypeAssetBundle;
+	}
+	else if (CAssets::IsAssetsFile(m_sFileName))
+	{
+		m_eFileType = kFileTypeAssets;
+	}
+	else
+	{
+		m_eFileType = kFileTypeUnknown;
+		m_sMessage = USTR("unknown file type");
+		return false;
+	}
+	return true;
+}
+
 bool CUnityTool::extractFile()
 {
 	bool bResult = false;
@@ -326,7 +356,27 @@ bool CUnityTool::extractFile()
 			fclose(fpTarget);
 		}
 	}
-	// TODO
+	switch (m_eFileType)
+	{
+	case kFileTypeAssetBundle:
+		{
+			CAssetBundle assetBundle;
+			assetBundle.SetFileName(m_sFileName);
+			assetBundle.SetDirName(m_sDirName);
+			assetBundle.SetObjectFileName(m_sObjectFileName);
+			assetBundle.SetBackupFileName(m_sBackupFileName);
+			assetBundle.SetVerbose(m_bVerbose);
+			bResult = assetBundle.ExtractFile();
+		}
+		break;
+	case kFileTypeAssets:
+		{
+			// TODO
+		}
+		break;
+	default:
+		break;
+	}
 	return bResult;
 }
 

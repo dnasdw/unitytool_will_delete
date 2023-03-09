@@ -21,6 +21,12 @@ public:
 		kActionSample,
 		kActionHelp
 	};
+	enum EFileType
+	{
+		kFileTypeUnknown,
+		kFileTypeAssetBundle,
+		kFileTypeAssets,
+	};
 	struct SOption
 	{
 		const UChar* Name;
@@ -37,6 +43,7 @@ public:
 private:
 	EParseOptionReturn parseOptions(const UChar* a_pName, int& a_nIndex, int a_nArgc, UChar* a_pArgv[]);
 	EParseOptionReturn parseOptions(int a_nKey, int& a_nIndex, int a_nArgc, UChar* a_pArgv[]);
+	bool checkFileType();
 	bool extractFile();
 	bool createFile();
 	int sample();
@@ -49,6 +56,8 @@ private:
 	bool m_bUnite;
 	bool m_bSplit;
 	bool m_bVerbose;
+	UString m_sMessage;
+	EFileType m_eFileType;
 };
 
 #endif	// UNITYTOOL_H_
