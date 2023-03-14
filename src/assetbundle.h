@@ -6,6 +6,14 @@
 class CAssetBundle : public CStringStream
 {
 public:
+	enum EArchiveNodeFlags
+	{
+		kArchiveNodeFlagsNone = 0,
+		kArchiveNodeFlagsDirectory = 1 << 0,
+		kArchiveNodeFlagsDeleted = 1 << 1,
+		kArchiveNodeFlagsSerializedFile = 1 << 2,
+		kArchiveNodeFlagsError = 0xFFFFFFF8
+	};
 	enum ECompressionType
 	{
 		kCompressionTypeNone,
@@ -16,8 +24,9 @@ public:
 	};
 	struct SSize
 	{
-		u32 Compressed;
 		u32 Uncompressed;
+		u32 Compressed;
+		u32 Flags;
 		SSize();
 	};
 	struct SAssetBundleHeader
@@ -39,6 +48,14 @@ public:
 		u32 Flags;
 		SAssetBundleHeader();
 	};
+	struct SAssetsEntry
+	{
+		n64 Offset;
+		n64 Size;
+		u32 Flags;
+		string Name;
+		SAssetsEntry();
+	};
 	CAssetBundle();
 	virtual ~CAssetBundle();
 	void SetFileName(const UString& a_sFileName);
@@ -56,6 +73,7 @@ public:
 	static const n32 s_nAssetBundleVersionMax;
 private:
 	bool readAssetBundleHeader();
+	bool readAssetsEntry();
 	UString m_sFileName;
 	UString m_sDirName;
 	UString m_sObjectFileName;
@@ -64,6 +82,8 @@ private:
 	n64 m_nFileSize;
 	SAssetBundleHeader m_AssetBundleHeader;
 	bool m_bUnityFS;
+	n32 m_nAssetsEntryCount;
+	vector<SAssetsEntry> m_vAssetsEntry;
 };
 
 #endif	// ASSETBUNDLE_H_
