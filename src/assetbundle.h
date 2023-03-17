@@ -74,6 +74,7 @@ public:
 private:
 	bool readAssetBundleHeader();
 	bool readAssetsEntry();
+	bool extractAssetsEntry();
 	UString m_sFileName;
 	UString m_sDirName;
 	UString m_sObjectFileName;

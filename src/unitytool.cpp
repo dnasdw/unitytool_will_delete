@@ -371,7 +371,14 @@ bool CUnityTool::extractFile()
 		break;
 	case kFileTypeAssets:
 		{
-			// TODO
+			CAssets assets;
+			assets.SetFileName(m_sFileName);
+			assets.SetResFileName(m_vResFileName);
+			assets.SetDirName(m_sDirName);
+			assets.SetObjectFileName(m_sObjectFileName);
+			assets.SetBackupFileName(m_sBackupFileName);
+			assets.SetVerbose(m_bVerbose);
+			bResult = assets.ExtractFile();
 		}
 		break;
 	default:

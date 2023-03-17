@@ -1,7 +1,9 @@
 #include "assetbundle.h"
 #include <lzma457lib/lzma457lib.h>
+#include "assets.h"
 #include "filestream.h"
 #include "lz4.h"
+#include "name.h"
 
 const string CAssetBundle::s_sSignatureUnityRaw = "UnityRaw";
 const string CAssetBundle::s_sSignatureUnityWeb = "UnityWeb";
@@ -110,7 +112,10 @@ bool CAssetBundle::ExtractFile()
 	{
 		return false;
 	}
-	// TODO
+	if (!extractAssetsEntry())
+	{
+		return false;
+	}
 	return true;
 }
 
@@ -869,4 +874,123 @@ bool CAssetBundle::readAssetsEntry()
 		}
 	}
 	return true;
+}
+
+bool CAssetBundle::extractAssetsEntry()
+{
+	set<string> sNameChecker;
+	map<string, string> mAssets;
+	map<string, string> mAssetsRes;
+	for (vector<SAssetsEntry>::const_iterator it = m_vAssetsEntry.begin(); it != m_vAssetsEntry.end(); ++it)
+	{
+		const SAssetsEntry& assetsEntry = *it;
+		const string& sAssetsName = assetsEntry.Name;
+		if (!sNameChecker.insert(sAssetsName).second)
+		{
+			return false;
+		}
+		string sFileData;
+		sFileData.resize(static_cast<string::size_type>(assetsEntry.Size));
+		if (!istringstream::seekg(static_cast<ptrdiff_t>(assetsEntry.Offset)).good())
+		{
+			return false;
+		}
+		if (!CStream::Read(&*sFileData.begin(), static_cast<ptrdiff_t>(assetsEntry.Size)).good())
+		{
+			return false;
+		}
+		if ((m_bUnityFS && assetsEntry.Flags == kArchiveNodeFlagsSerializedFile) || (!m_bUnityFS && (m_AssetBundleHeader.Signature == s_sSignatureUnityWeb || m_AssetBundleHeader.Signature == s_sSignatureUnityRaw)))
+		{
+			string& sAssets = mAssets[sAssetsName];
+			sAssets.swap(sFileData);
+		}
+		else if (m_bUnityFS && assetsEntry.Flags == kArchiveNodeFlagsNone)
+		{
+			string& sAssetsRes = mAssetsRes[sAssetsName];
+			sAssetsRes.swap(sFileData);
+		}
+	}
+	istringstream::str("");
+	for (map<string, string>::const_iterator it = mAssetsRes.begin(); it != mAssetsRes.end(); ++it)
+	{
+		const string& sAssetsName = it->first;
+		sNameChecker.erase(sAssetsName);
+	}
+	map<string, string> mNameDir;
+	if (mAssets.size() == 1)
+	{
+		mNameDir[mAssets.begin()->first] = "";
+	}
+	else
+	{
+		CName::GenerateNewNameMap(sNameChecker, mNameDir, true);
+	}
+	map<string, map<string, string>> mAssetsPathRes;
+	for (map<string, string>::iterator itRes = mAssetsRes.begin(); itRes != mAssetsRes.end(); ++itRes)
+	{
+		string sAssetsResName = itRes->first;
+		string& sAssetsRes = itRes->second;
+		string::size_type uPos = sAssetsResName.rfind(".");
+		if (uPos == string::npos)
+		{
+			return false;
+		}
+		string sAssetsName = sAssetsResName.substr(0, uPos);
+		map<string, string>::const_iterator it = mAssets.find(sAssetsName);
+		if (it == mAssets.end())
+		{
+			return false;
+		}
+		if (StartWith(sAssetsResName, "CAB-"))
+		{
+			sAssetsResName = "archive:/" + sAssetsName + "/" + sAssetsResName;
+		}
+		map<string, string>& mPathRes = mAssetsPathRes[sAssetsName];
+		map<string, string>::const_iterator itPathRes = mPathRes.find(sAssetsResName);
+		if (itPathRes != mPathRes.end())
+		{
+			return false;
+		}
+		mPathRes[sAssetsResName].swap(sAssetsRes);
+	}
+	bool bResult = true;
+	for (vector<SAssetsEntry>::const_iterator it = m_vAssetsEntry.begin(); it != m_vAssetsEntry.end(); ++it)
+	{
+		const SAssetsEntry& assetsEntry = *it;
+		if ((m_bUnityFS && assetsEntry.Flags == kArchiveNodeFlagsSerializedFile) || (!m_bUnityFS && (m_AssetBundleHeader.Signature == s_sSignatureUnityWeb || m_AssetBundleHeader.Signature == s_sSignatureUnityRaw)))
+		{
+			const string& sAssetsName = assetsEntry.Name;
+			string& sAssets = mAssets[sAssetsName];
+			CAssets assets;
+			assets.str(sAssets);
+			assets.SetFileSize(sAssets.size());
+			sAssets.clear();
+			ShrinkToFit(sAssets);
+			map<string, map<string, string>>::iterator itPathRes = mAssetsPathRes.find(sAssetsName);
+			if (itPathRes != mAssetsPathRes.end())
+			{
+				map<string, string>& mPathRes = itPathRes->second;
+				assets.SetPathRes(mPathRes);
+				mPathRes.clear();
+			}
+			UString sDirName = U8ToU(mNameDir[sAssetsName]);
+			if (sDirName.empty())
+			{
+				sDirName = m_sDirName;
+			}
+			else
+			{
+				sDirName = m_sDirName + USTR("/") + sDirName;
+			}
+			assets.SetDirName(sDirName);
+			assets.SetObjectFileName(m_sObjectFileName);
+			assets.SetBackupFileName(m_sBackupFileName);
+			assets.SetVerbose(m_bVerbose);
+			if (!assets.ExtractFile())
+			{
+				bResult = false;
+			}
+		}
+	}
+	return bResult;
 }
