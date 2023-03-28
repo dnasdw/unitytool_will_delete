@@ -39,6 +39,12 @@ public:
 	private:
 		const vector<SFileEntry>& m_vFileEntry;
 	};
+	struct SFileIdEntry
+	{
+		n32 FileId;
+		n64 PathId;
+		SFileIdEntry();
+	};
 	CAssets();
 	virtual ~CAssets();
 	void SetFileSize(n64 a_nFileSize);
@@ -61,6 +67,7 @@ private:
 	bool readTypeTreeNodeV2(STypeTreeRoot& a_TypeTreeRoot, n32 a_nRootIndex);
 	bool readTypeTreeNodeV1(STypeTreeRoot& a_TypeTreeRoot);
 	bool readFileEntry();
+	bool readFileIdEntry();
 	static const string s_sCommonString;
 	n64 m_nFileSize;
 	map<string, string> m_mPathRes;
@@ -78,6 +85,8 @@ private:
 	n32 m_nFileEntryCount;
 	vector<SFileEntry> m_vFileEntry;
 	vector<n32> m_vFileIndexSortByOffset;
+	n32 m_nFileIdEntryCount;
+	vector<SFileIdEntry> m_vFileIdEntry;
 	STypeTree m_RefTypeTypeTree;
 	string m_sUserInformation;
 };

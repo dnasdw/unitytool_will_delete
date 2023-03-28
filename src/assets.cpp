@@ -114,6 +114,12 @@ bool CAssets::SFileEntryCompare::operator()(const n32& a_nLhsIndex, const n32& a
 	return m_vFileEntry[a_nLhsIndex].Offset < m_vFileEntry[a_nRhsIndex].Offset;
 }
 
+CAssets::SFileIdEntry::SFileIdEntry()
+	: FileId(0)
+	, PathId(0)
+{
+}
+
 CAssets::CAssets()
 	: m_nFileSize(0)
 	, m_bVerbose(false)
@@ -121,6 +127,7 @@ CAssets::CAssets()
 	, m_nDataOffsetMax(0)
 	, m_uBigIDEnabled(0)
 	, m_nFileEntryCount(0)
+	, m_nFileIdEntryCount(0)
 {
 	m_TypeTree.IsRefTypeTypeTree = false;
 	m_RefTypeTypeTree.IsRefTypeTypeTree = true;
@@ -467,6 +474,10 @@ bool CAssets::readMetadata()
 		}
 	}
 	if (!readFileEntry())
+	{
+		return false;
+	}
+	if (!readFileIdEntry())
 	{
 		return false;
 	}
@@ -1084,6 +1095,70 @@ bool CAssets::readFileEntry()
 				if (fileEntry.Offset + fileEntry.Size != m_nDataOffsetMax)
 				{
 					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+bool CAssets::readFileIdEntry()
+{
+	if (m_AssetsHeader.AssetsVersion >= 11)
+	{
+		if (!CStream::ReadN32(m_nFileIdEntryCount, m_AssetsHeader.LittleEndian).good())
+		{
+			return false;
+		}
+		if (m_nFileIdEntryCount < 0)
+		{
+			return false;
+		}
+		if (m_nFileIdEntryCount > 0)
+		{
+			m_vFileIdEntry.resize(m_nFileIdEntryCount);
+			n64 nMetadataOffsetBegin = 0;
+			if (m_AssetsHeader.AssetsVersion >= 22)
+			{
+				nMetadataOffsetBegin = 0x30;
+			}
+			else if (m_AssetsHeader.AssetsVersion >= 9)
+			{
+				nMetadataOffsetBegin = 0x14;
+			}
+			else
+			{
+				nMetadataOffsetBegin = m_nDataOffsetMax + 1;
+			}
+			for (n32 i = 0; i < m_nFileIdEntryCount; i++)
+			{
+				SFileIdEntry& fileIdEntry = m_vFileIdEntry[i];
+				if (!CStream::ReadN32(fileIdEntry.FileId, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+				if (m_AssetsHeader.AssetsVersion >= 14)
+				{
+					n64 nMetadataOffsetCurrent = istringstream::tellg();
+					n64 nMetadataOffset = nMetadataOffsetCurrent - nMetadataOffsetBegin;
+					n32 nPaddingSize = static_cast<n32>(Align(nMetadataOffset, 4) - nMetadataOffset);
+					if (!CStream::IsPaddingValid(nPaddingSize))
+					{
+						return false;
+					}
+					if (!CStream::ReadN64(fileIdEntry.PathId, m_AssetsHeader.LittleEndian).good())
+					{
+						return false;
+					}
+				}
+				else
+				{
+					n32 nPathId = 0;
+					if (!CStream::ReadN32(nPathId, m_AssetsHeader.LittleEndian).good())
+					{
+						return false;
+					}
+					fileIdEntry.PathId = nPathId;
 				}
 			}
 		}
