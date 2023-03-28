@@ -120,6 +120,12 @@ CAssets::SFileIdEntry::SFileIdEntry()
 {
 }
 
+CAssets::SExternalReference::SExternalReference()
+	: Type(0)
+{
+	memset(Guid, 0, sizeof(Guid));
+}
+
 CAssets::CAssets()
 	: m_nFileSize(0)
 	, m_bVerbose(false)
@@ -128,6 +134,7 @@ CAssets::CAssets()
 	, m_uBigIDEnabled(0)
 	, m_nFileEntryCount(0)
 	, m_nFileIdEntryCount(0)
+	, m_nExternalReferenceCount(0)
 {
 	m_TypeTree.IsRefTypeTypeTree = false;
 	m_RefTypeTypeTree.IsRefTypeTypeTree = true;
@@ -481,16 +488,42 @@ bool CAssets::readMetadata()
 	{
 		return false;
 	}
-	// TODO
-	//if (!readTypeTree(m_RefTypeTypeTree))
-	//{
-	//	return false;
-	//}
-	//if (!CStream::ReadString(m_sUserInformation).good())
-	//{
-	//	return false;
-	//}
-	// TODO
+	if (!readExternalReference())
+	{
+		return false;
+	}
+	if (!readTypeTree(m_RefTypeTypeTree))
+	{
+		return false;
+	}
+	if (!CStream::ReadString(m_sUserInformation).good())
+	{
+		return false;
+	}
+	n64 nPos = istringstream::tellg();
+	if (m_AssetsHeader.AssetsVersion >= 9)
+	{
+		if (nPos != nPosAfterAssetsHeader + m_AssetsHeader.MetadataSize)
+		{
+			return false;
+		}
+		n64 nSize = m_AssetsHeader.DataOffset - nPos;
+		if (!CStream::IsPaddingValid(static_cast<ptrdiff_t>(nSize)))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		if (nPos != m_AssetsHeader.FileSize)
+		{
+			return false;
+		}
+		if (!istringstream::seekg(static_cast<ptrdiff_t>(nPosAfterAssetsHeader)).good())
+		{
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -1160,6 +1193,52 @@ bool CAssets::readFileIdEntry()
 					}
 					fileIdEntry.PathId = nPathId;
 				}
+			}
+		}
+	}
+	return true;
+}
+
+bool CAssets::readExternalReference()
+{
+	if (!CStream::ReadN32(m_nExternalReferenceCount, m_AssetsHeader.LittleEndian).good())
+	{
+		return false;
+	}
+	if (m_nExternalReferenceCount < 0)
+	{
+		return false;
+	}
+	if (m_nExternalReferenceCount > 0)
+	{
+		m_vExternalReference.resize(m_nExternalReferenceCount);
+		for (n32 i = 0; i < m_nExternalReferenceCount; i++)
+		{
+			SExternalReference& externalReference = m_vExternalReference[i];
+			if (m_AssetsHeader.AssetsVersion >= 6)
+			{
+				if (!CStream::ReadString(externalReference.Unknown0x0).good())
+				{
+					return false;
+				}
+			}
+			if (m_AssetsHeader.AssetsVersion >= 5)
+			{
+				for (n32 j = 0; j < SDW_ARRAY_COUNT(externalReference.Guid); j++)
+				{
+					if (!CStream::ReadU32(externalReference.Guid[j], m_AssetsHeader.LittleEndian).good())
+					{
+						return false;
+					}
+				}
+				if (!CStream::ReadU32(externalReference.Type, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+			}
+			if (!CStream::ReadString(externalReference.Path).good())
+			{
+				return false;
 			}
 		}
 	}

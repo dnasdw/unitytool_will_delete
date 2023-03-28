@@ -45,6 +45,14 @@ public:
 		n64 PathId;
 		SFileIdEntry();
 	};
+	struct SExternalReference
+	{
+		string Unknown0x0;
+		u32 Guid[4];
+		u32 Type;
+		string Path;
+		SExternalReference();
+	};
 	CAssets();
 	virtual ~CAssets();
 	void SetFileSize(n64 a_nFileSize);
@@ -68,6 +76,7 @@ private:
 	bool readTypeTreeNodeV1(STypeTreeRoot& a_TypeTreeRoot);
 	bool readFileEntry();
 	bool readFileIdEntry();
+	bool readExternalReference();
 	static const string s_sCommonString;
 	n64 m_nFileSize;
 	map<string, string> m_mPathRes;
@@ -87,6 +96,8 @@ private:
 	vector<n32> m_vFileIndexSortByOffset;
 	n32 m_nFileIdEntryCount;
 	vector<SFileIdEntry> m_vFileIdEntry;
+	n32 m_nExternalReferenceCount;
+	vector<SExternalReference> m_vExternalReference;
 	STypeTree m_RefTypeTypeTree;
 	string m_sUserInformation;
 };
