@@ -89,12 +89,38 @@ CAssets::SAssetsHeader::SAssetsHeader()
 {
 }
 
+CAssets::SFileEntry::SFileEntry()
+	: PathId(0)
+	, Offset(0)
+	, Size(0)
+	, TypeIndex(-1)
+	, ClassIdV1(0)
+	, ClassId(0)
+	, ScriptIndex(-1)
+	, IsStripped(false)
+	, IsDestroyed(false)
+	, ClassIdV2(-2)
+	, DummySize(0)
+{
+}
+
+CAssets::SFileEntryCompare::SFileEntryCompare(const vector<SFileEntry>& a_vFileEntry)
+	: m_vFileEntry(a_vFileEntry)
+{
+}
+
+bool CAssets::SFileEntryCompare::operator()(const n32& a_nLhsIndex, const n32& a_nRhsIndex) const
+{
+	return m_vFileEntry[a_nLhsIndex].Offset < m_vFileEntry[a_nRhsIndex].Offset;
+}
+
 CAssets::CAssets()
 	: m_nFileSize(0)
 	, m_bVerbose(false)
 	, m_nDataOffsetMin(0)
 	, m_nDataOffsetMax(0)
 	, m_uBigIDEnabled(0)
+	, m_nFileEntryCount(0)
 {
 	m_TypeTree.IsRefTypeTypeTree = false;
 	m_RefTypeTypeTree.IsRefTypeTypeTree = true;
@@ -439,6 +465,10 @@ bool CAssets::readMetadata()
 		{
 			return false;
 		}
+	}
+	if (!readFileEntry())
+	{
+		return false;
 	}
 	// TODO
 	//if (!readTypeTree(m_RefTypeTypeTree))
@@ -863,5 +893,200 @@ bool CAssets::readTypeTreeNodeV1(STypeTreeRoot& a_TypeTreeRoot)
 		}
 	}
 	a_TypeTreeRoot.ChildCount = static_cast<n32>(a_TypeTreeRoot.IndexedNode.size());
+	return true;
+}
+
+bool CAssets::readFileEntry()
+{
+	if (!CStream::ReadN32(m_nFileEntryCount, m_AssetsHeader.LittleEndian).good())
+	{
+		return false;
+	}
+	if (m_nFileEntryCount < 0)
+	{
+		return false;
+	}
+	if (m_nFileEntryCount > 0)
+	{
+		m_vFileEntry.resize(m_nFileEntryCount);
+		m_vFileIndexSortByOffset.resize(m_nFileEntryCount);
+		n64 nMetadataOffsetBegin = 0;
+		if (m_AssetsHeader.AssetsVersion >= 22)
+		{
+			nMetadataOffsetBegin = 0x30;
+		}
+		else if (m_AssetsHeader.AssetsVersion >= 9)
+		{
+			nMetadataOffsetBegin = 0x14;
+		}
+		else
+		{
+			nMetadataOffsetBegin = m_nDataOffsetMax + 1;
+		}
+		for (n32 i = 0; i < m_nFileEntryCount; i++)
+		{
+			SFileEntry& fileEntry = m_vFileEntry[i];
+			m_vFileIndexSortByOffset[i] = i;
+			if (m_AssetsHeader.AssetsVersion >= 14)
+			{
+				n64 nMetadataOffsetCurrent = istringstream::tellg();
+				n64 nMetadataOffset = nMetadataOffsetCurrent - nMetadataOffsetBegin;
+				n32 nPaddingSize = static_cast<n32>(Align(nMetadataOffset, 4) - nMetadataOffset);
+				if (!CStream::IsPaddingValid(nPaddingSize))
+				{
+					return false;
+				}
+				if (!CStream::ReadN64(fileEntry.PathId, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+			}
+			else
+			{
+				n32 nPathId = 0;
+				if (!CStream::ReadN32(nPathId, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+				fileEntry.PathId = nPathId;
+			}
+			if (m_AssetsHeader.AssetsVersion >= 22)
+			{
+				if (!CStream::ReadN64(fileEntry.Offset, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+			}
+			else
+			{
+				u32 uOffset = 0;
+				if (!CStream::ReadU32(uOffset, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+				fileEntry.Offset = uOffset;
+			}
+			fileEntry.Offset += m_AssetsHeader.DataOffset;
+			if (fileEntry.Offset < m_nDataOffsetMin)
+			{
+				return false;
+			}
+			if (!CStream::ReadU32(fileEntry.Size, m_AssetsHeader.LittleEndian).good())
+			{
+				return false;
+			}
+			if (fileEntry.Offset + fileEntry.Size > m_nDataOffsetMax)
+			{
+				return false;
+			}
+			if (m_AssetsHeader.AssetsVersion >= 16)
+			{
+				if (!CStream::ReadN32(fileEntry.TypeIndex, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+				if (fileEntry.TypeIndex < 0)
+				{
+					return false;
+				}
+				if (fileEntry.TypeIndex >= m_TypeTree.TypeCount)
+				{
+					return false;
+				}
+				fileEntry.ClassIdV2 = m_TypeTree.Root[fileEntry.TypeIndex].ClassIdV2;
+				fileEntry.ClassId = fileEntry.ClassIdV2;
+			}
+			else
+			{
+				n16 nClassId = 0;
+				if (!CStream::ReadN32(fileEntry.ClassIdV1, m_AssetsHeader.LittleEndian)
+					.ReadN16(nClassId, m_AssetsHeader.LittleEndian)
+					.good())
+				{
+					return false;
+				}
+				fileEntry.ClassId = nClassId;
+				if (m_TypeTree.TypeCount != 0)
+				{
+					map<n32, n32>::const_iterator it = m_TypeTree.ClassIdV1Index.find(fileEntry.ClassIdV1);
+					if (it == m_TypeTree.ClassIdV1Index.end())
+					{
+						return false;
+					}
+					fileEntry.TypeIndex = it->second;
+					fileEntry.ClassIdV2 = m_TypeTree.Root[fileEntry.TypeIndex].ClassIdV2;
+				}
+			}
+			if (m_AssetsHeader.AssetsVersion <= 10)
+			{
+				u16 uIsDestroyed = 0;
+				if (!CStream::ReadU16(uIsDestroyed, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+				fileEntry.IsDestroyed = uIsDestroyed != 0;
+				if (uIsDestroyed != 0 && uIsDestroyed != 1)
+				{
+					return false;
+				}
+			}
+			if (m_AssetsHeader.AssetsVersion >= 11 && m_AssetsHeader.AssetsVersion < 17)
+			{
+				if (!CStream::ReadN16(fileEntry.ScriptIndex, m_AssetsHeader.LittleEndian).good())
+				{
+					return false;
+				}
+			}
+			if (m_AssetsHeader.AssetsVersion >= 15 && m_AssetsHeader.AssetsVersion < 17)
+			{
+				u8 uIsStripped = 0;
+				if (!CStream::ReadU8(uIsStripped).good())
+				{
+					return false;
+				}
+				fileEntry.IsStripped = uIsStripped != 0;
+				if (uIsStripped != 0 && uIsStripped != 1)
+				{
+					return false;
+				}
+			}
+		}
+		stable_sort(m_vFileIndexSortByOffset.begin(), m_vFileIndexSortByOffset.end(), SFileEntryCompare(m_vFileEntry));
+		for (n32 i = 0; i < m_nFileEntryCount; i++)
+		{
+			const SFileEntry& fileEntry = m_vFileEntry[m_vFileIndexSortByOffset[i]];
+			if (i == 0)
+			{
+				if (fileEntry.Offset != m_nDataOffsetMin)
+				{
+					return false;
+				}
+			}
+			else
+			{
+				SFileEntry& prevFileEntry = m_vFileEntry[m_vFileIndexSortByOffset[i - 1]];
+				n64 nDummyOffset = Align(prevFileEntry.Offset + prevFileEntry.Size, 8);
+				if (fileEntry.Offset != nDummyOffset)
+				{
+					if (fileEntry.Offset < nDummyOffset)
+					{
+						return false;
+					}
+					prevFileEntry.DummySize = fileEntry.Offset - nDummyOffset;
+					if (prevFileEntry.DummySize % 8 != 0)
+					{
+						return false;
+					}
+				}
+			}
+			if (i == m_nFileEntryCount - 1)
+			{
+				if (fileEntry.Offset + fileEntry.Size != m_nDataOffsetMax)
+				{
+					return false;
+				}
+			}
+		}
+	}
 	return true;
 }

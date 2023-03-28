@@ -16,6 +16,29 @@ public:
 		bool LittleEndian;
 		SAssetsHeader();
 	};
+	struct SFileEntry
+	{
+		n64 PathId;
+		n64 Offset;
+		u32 Size;
+		n32 TypeIndex;
+		n32 ClassIdV1;
+		n32 ClassId;
+		n16 ScriptIndex;
+		bool IsStripped;
+		bool IsDestroyed;
+		n32 ClassIdV2;
+		n64 DummySize;
+		SFileEntry();
+	};
+	struct SFileEntryCompare
+	{
+	public:
+		SFileEntryCompare(const vector<SFileEntry>& a_vFileEntry);
+		bool operator()(const n32& a_nLhsIndex, const n32& a_nRhsIndex) const;
+	private:
+		const vector<SFileEntry>& m_vFileEntry;
+	};
 	CAssets();
 	virtual ~CAssets();
 	void SetFileSize(n64 a_nFileSize);
@@ -37,6 +60,7 @@ private:
 	bool readTypeTreeRoot(STypeTreeRoot& a_TypeTreeRoot, n32 a_nRootIndex, bool a_bNotWriteIDHashForScriptType);
 	bool readTypeTreeNodeV2(STypeTreeRoot& a_TypeTreeRoot, n32 a_nRootIndex);
 	bool readTypeTreeNodeV1(STypeTreeRoot& a_TypeTreeRoot);
+	bool readFileEntry();
 	static const string s_sCommonString;
 	n64 m_nFileSize;
 	map<string, string> m_mPathRes;
@@ -51,6 +75,9 @@ private:
 	n64 m_nDataOffsetMax;
 	STypeTree m_TypeTree;
 	u32 m_uBigIDEnabled;
+	n32 m_nFileEntryCount;
+	vector<SFileEntry> m_vFileEntry;
+	vector<n32> m_vFileIndexSortByOffset;
 	STypeTree m_RefTypeTypeTree;
 	string m_sUserInformation;
 };
