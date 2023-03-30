@@ -3,6 +3,33 @@
 
 #include <sdw.h>
 
+enum ETypeTreeFlags
+{
+	kTypeTreeFlagsNone = 0,
+	kTypeTreeFlagsIsArray = 1 << 0,
+	kTypeTreeFlagsIsManagedReference = 1 << 1,
+	kTypeTreeFlagsIsManagedReferenceRegistry = 1 << 2,
+	kTypeTreeFlagsIsArrayOfRefs = 1 << 3
+};
+
+enum ETypeTreeMetaFlags
+{
+	kTypeTreeMetaFlagsNone = 0,
+	kTypeTreeMetaFlagsAlignBytes = 1 << 14,
+	kTypeTreeMetaFlagsAnyChildUsesAlignBytes = 1 << 15
+};
+
+enum EManagedReferenceRegistryChildType
+{
+	kManagedReferenceRegistryChildTypeNone,
+	kManagedReferenceRegistryChildTypeRefIds,
+	kManagedReferenceRegistryChildTypeRefIdsArray,
+	kManagedReferenceRegistryChildTypeRefIdsArrayData,
+	kManagedReferenceRegistryChildTypeRefIdsArrayDataRidTypeData,
+	kManagedReferenceRegistryChildTypeRefIdsArrayDataTypeClassNamespaceAssembly,
+	kManagedReferenceRegistryChildTypeMax
+};
+
 struct STypeTree;
 
 struct STypeTreeNode
@@ -22,6 +49,7 @@ struct STypeTreeNode
 	n32 ChildCount;
 	vector<n32> ChildIndex;
 	STypeTreeNode();
+	bool IsAlign() const;
 };
 
 struct STypeTreeRoot
@@ -44,6 +72,7 @@ struct STypeTreeRoot
 	STypeTree* TypeTree;
 	STypeTreeRoot();
 	bool CreateTypeTree();
+	const STypeTreeNode* GetNodeByIndex(n32 a_nIndex) const;
 };
 
 struct STypeTree
@@ -57,6 +86,7 @@ struct STypeTree
 	map<string, map<string, map<string, n32>>> AssemblyNamespaceClassIndex;
 	map<n32, n32> ClassIdV1Index;
 	STypeTree();
+	const STypeTreeRoot* GetRoot(const string& a_sAssemblyName, const string& a_sNamespaceName, const string& a_sClassName) const;
 };
 
 #endif	// TYPETREE_H_

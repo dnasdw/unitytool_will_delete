@@ -1,6 +1,9 @@
 #include "assets.h"
+#include "classid.h"
 #include "filestream.h"
 #include "version.h"
+#include "Classes/AssetBundle.h"
+#include "Classes/ResourceManager.h"
 
 const string CAssets::s_sCommonString = Replace<string>(
 	/*        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F  */ """"""""""""""""""
@@ -274,6 +277,10 @@ bool CAssets::ExtractFile()
 		}
 	}
 	if (!readMetadata())
+	{
+		return false;
+	}
+	if (!readContainer())
 	{
 		return false;
 	}
@@ -1237,6 +1244,147 @@ bool CAssets::readExternalReference()
 				}
 			}
 			if (!CStream::ReadString(externalReference.Path).good())
+			{
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool CAssets::readContainer()
+{
+	for (n32 i = 0; i < m_nFileEntryCount; i++)
+	{
+		const SFileEntry& fileEntry = m_vFileEntry[i];
+		if (fileEntry.ClassId == kClassIdAssetBundle_142)
+		{
+			// AssetBundle
+			if (fileEntry.Size == 0)
+			{
+				return false;
+			}
+			string sFileData;
+			sFileData.resize(fileEntry.Size);
+			if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+			{
+				return false;
+			}
+			if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+			{
+				return false;
+			}
+			nsu::AssetBundle assetBundle;
+			assetBundle.str(sFileData);
+			sFileData.clear();
+			ShrinkToFit(sFileData);
+			assetBundle.SetAssetsVersion(m_AssetsHeader.AssetsVersion);
+			assetBundle.SetLittleEndian(m_AssetsHeader.LittleEndian);
+			if (fileEntry.TypeIndex >= 0)
+			{
+				const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+				if (root.ChildCount != 0)
+				{
+					assetBundle.SetTypeTreeRoot(&root);
+				}
+			}
+			if (!assetBundle.ReadContainer())
+			{
+				return false;
+			}
+			if (fileEntry.TypeIndex >= 0)
+			{
+				const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+				if (root.ChildCount != 0)
+				{
+					n64 nPos = assetBundle.tellg();
+					if (nPos != fileEntry.Size)
+					{
+						return false;
+					}
+				}
+			}
+			if (!mergeContainer(assetBundle.GetContainerFilePath()))
+			{
+				return false;
+			}
+		}
+		else if (fileEntry.ClassId == kClassIdResourceManager_147)
+		{
+			// ResourceManager
+			if (fileEntry.Size == 0)
+			{
+				return false;
+			}
+			string sFileData;
+			sFileData.resize(fileEntry.Size);
+			if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+			{
+				return false;
+			}
+			if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+			{
+				return false;
+			}
+			nsu::ResourceManager resourceManager;
+			resourceManager.str(sFileData);
+			sFileData.clear();
+			ShrinkToFit(sFileData);
+			resourceManager.SetAssetsVersion(m_AssetsHeader.AssetsVersion);
+			resourceManager.SetLittleEndian(m_AssetsHeader.LittleEndian);
+			if (fileEntry.TypeIndex >= 0)
+			{
+				const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+				if (root.ChildCount != 0)
+				{
+					resourceManager.SetTypeTreeRoot(&root);
+				}
+			}
+			if (!resourceManager.ReadContainer())
+			{
+				return false;
+			}
+			if (fileEntry.TypeIndex >= 0)
+			{
+				const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+				if (root.ChildCount != 0)
+				{
+					n64 nPos = resourceManager.tellg();
+					if (nPos != fileEntry.Size)
+					{
+						return false;
+					}
+				}
+			}
+			if (!mergeContainer(resourceManager.GetContainerFilePath()))
+			{
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool CAssets::mergeContainer(const map<n32, map<n64, string>>& a_mContainerFilePath)
+{
+	for (map<n32, map<n64, string>>::const_iterator itFile = a_mContainerFilePath.begin(); itFile != a_mContainerFilePath.end(); ++itFile)
+	{
+		n32 nFileId = itFile->first;
+		const map<n64, string>& mPath0 = itFile->second;
+		for (map<n64, string>::const_iterator itPath0 = mPath0.begin(); itPath0 != mPath0.end(); ++itPath0)
+		{
+			n64 nPathId = itPath0->first;
+			const string& sPath = itPath0->second;
+			map<n64, string>& mPath1 = m_mContainerFilePath[nFileId];
+			map<n64, string>::const_iterator itPath1 = mPath1.find(nPathId);
+			if (itPath1 == mPath1.end())
+			{
+				if (!mPath1.insert(make_pair(nPathId, sPath)).second)
+				{
+					return false;
+				}
+			}
+			else if (itPath1->second != sPath)
 			{
 				return false;
 			}
