@@ -79,6 +79,7 @@ private:
 	bool readExternalReference();
 	bool readContainer();
 	bool mergeContainer(const map<n32, map<n64, string>>& a_mContainerFilePath);
+	bool readName();
 	static const string s_sCommonString;
 	n64 m_nFileSize;
 	map<string, string> m_mPathRes;
@@ -103,6 +104,8 @@ private:
 	STypeTree m_RefTypeTypeTree;
 	string m_sUserInformation;
 	map<n32, map<n64, string>> m_mContainerFilePath;
+	vector<string> m_vFileEntryName;
+	vector<string> m_vFileOutputName;
 };
 
 #endif	// ASSETS_H

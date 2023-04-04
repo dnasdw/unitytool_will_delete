@@ -1,8 +1,13 @@
 #include "assets.h"
 #include "classid.h"
 #include "filestream.h"
+#include "name.h"
+#include "namegetter.h"
+#include "typechecker.h"
 #include "version.h"
 #include "Classes/AssetBundle.h"
+#include "Classes/GameObject.h"
+#include "Classes/MonoBehaviour.h"
 #include "Classes/ResourceManager.h"
 
 const string CAssets::s_sCommonString = Replace<string>(
@@ -281,6 +286,10 @@ bool CAssets::ExtractFile()
 		return false;
 	}
 	if (!readContainer())
+	{
+		return false;
+	}
+	if (!readName())
 	{
 		return false;
 	}
@@ -1390,5 +1399,307 @@ bool CAssets::mergeContainer(const map<n32, map<n64, string>>& a_mContainerFileP
 			}
 		}
 	}
+	return true;
+}
+
+bool CAssets::readName()
+{
+	m_vFileEntryName.resize(m_nFileEntryCount);
+	const map<n64, string>& mPath = m_mContainerFilePath[0];
+	for (n32 i = 0; i < m_nFileEntryCount; i++)
+	{
+		m_vFileEntryName[i] = Format("unnamed_%d", i);
+		string sFileName;
+		string sExtName;
+		const SFileEntry& fileEntry = m_vFileEntry[i];
+		n64 nPathId = fileEntry.PathId;
+		map<n64, string>::const_iterator itPath = mPath.find(nPathId);
+		if (itPath != mPath.end())
+		{
+			sFileName = itPath->second;
+			string::size_type uPos = sFileName.find_last_of("/\\");
+			if (uPos != string::npos)
+			{
+				sFileName = sFileName.substr(uPos + 1);
+			}
+			uPos = sFileName.rfind(".");
+			if (uPos != string::npos)
+			{
+				sExtName = sFileName.substr(uPos + 1);
+				sFileName = sFileName.substr(0, uPos);
+			}
+		}
+		if (fileEntry.TypeIndex >= 0)
+		{
+			const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+			if (root.ChildCount != 0)
+			{
+				string sFileData;
+				sFileData.resize(fileEntry.Size);
+				if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+				{
+					return false;
+				}
+				if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+				{
+					return false;
+				}
+				CTypeChecker typeChecker;
+				typeChecker.str(sFileData);
+				typeChecker.SetLittleEndian(m_AssetsHeader.LittleEndian);
+				typeChecker.SetTypeTreeRoot(&root);
+				typeChecker.SetRefTypeTypeTree(&m_RefTypeTypeTree);
+				if (!typeChecker.Travel())
+				{
+					return false;
+				}
+				n64 nPos = typeChecker.tellg();
+				if (nPos != fileEntry.Size)
+				{
+					return false;
+				}
+			}
+		}
+		if (fileEntry.Size >= 4)
+		{
+			switch (fileEntry.ClassId)
+			{
+			case kClassIdMaterial_21:
+			case kClassIdTexture2D_28:
+			case kClassIdMesh_43:
+			case kClassIdShader_48:
+			case kClassIdTextAsset_49:
+			case kClassIdComputeShader_72:
+			case kClassIdAnimationClip_74:
+			case kClassIdAudioClip_83:
+			case kClassIdRenderTexture_84:
+			case kClassIdCubemap_89:
+			case kClassIdAnimatorController_91:
+			case kClassIdShaderInclude_109:
+			case kClassIdMonoScript_115:
+			case kClassIdFont_128:
+			case kClassIdPhysicMaterial_134:
+			case kClassIdAssetBundle_142:
+			case kClassIdPreloadData_150:
+			case kClassIdSprite_213:
+			case kClassIdAnimatorOverrideController_221:
+			case kClassIdLightProbes_258:
+			case kClassIdAssetBundleManifest_290:
+			case kClassIdLightingSettings_850595691_0x32B30F6B:
+				{
+					string sFileData;
+					sFileData.resize(fileEntry.Size);
+					if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+					{
+						return false;
+					}
+					if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+					{
+						return false;
+					}
+					CNameGetter nameGetter;
+					nameGetter.str(sFileData);
+					sFileData.clear();
+					ShrinkToFit(sFileData);
+					nameGetter.SetLittleEndian(m_AssetsHeader.LittleEndian);
+					if (!nameGetter.ReadName())
+					{
+						return false;
+					}
+					string sFileNameFromFile = nameGetter.GetName();
+					if (!sFileNameFromFile.empty())
+					{
+						sFileName.swap(sFileNameFromFile);
+					}
+				}
+				break;
+			case kClassIdGameObject_1:
+				{
+					if (fileEntry.TypeIndex >= 0)
+					{
+						const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+						if (root.ChildCount != 0)
+						{
+							string sFileData;
+							sFileData.resize(fileEntry.Size);
+							if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+							{
+								return false;
+							}
+							if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+							{
+								return false;
+							}
+							nsu::GameObject gameObject;
+							gameObject.str(sFileData);
+							sFileData.clear();
+							ShrinkToFit(sFileData);
+							gameObject.SetLittleEndian(m_AssetsHeader.LittleEndian);
+							gameObject.SetTypeTreeRoot(&root);
+							gameObject.SetRefTypeTypeTree(&m_RefTypeTypeTree);
+							if (!gameObject.ReadName())
+							{
+								return false;
+							}
+							n64 nPos = gameObject.tellg();
+							if (nPos != fileEntry.Size)
+							{
+								return false;
+							}
+							string sFileNameFromFile = gameObject.GetName();
+							if (!sFileNameFromFile.empty())
+							{
+								sFileName.swap(sFileNameFromFile);
+							}
+						}
+					}
+				}
+				break;
+			case kClassIdMonoBehaviour_114:
+				{
+					string sFileData;
+					sFileData.resize(fileEntry.Size);
+					if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+					{
+						return false;
+					}
+					if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+					{
+						return false;
+					}
+					nsu::MonoBehaviour monoBehaviour;
+					monoBehaviour.str(sFileData);
+					sFileData.clear();
+					ShrinkToFit(sFileData);
+					monoBehaviour.SetAssetsVersion(m_AssetsHeader.AssetsVersion);
+					monoBehaviour.SetLittleEndian(m_AssetsHeader.LittleEndian);
+					if (fileEntry.TypeIndex >= 0)
+					{
+						const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+						if (root.ChildCount != 0)
+						{
+							monoBehaviour.SetTypeTreeRoot(&root);
+							monoBehaviour.SetRefTypeTypeTree(&m_RefTypeTypeTree);
+						}
+					}
+					if (!monoBehaviour.ReadName())
+					{
+						return false;
+					}
+					if (fileEntry.TypeIndex >= 0)
+					{
+						const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+						if (root.ChildCount != 0)
+						{
+							n64 nPos = monoBehaviour.tellg();
+							if (nPos != fileEntry.Size)
+							{
+								return false;
+							}
+						}
+					}
+					string sFileNameFromFile = monoBehaviour.GetName();
+					if (!sFileNameFromFile.empty())
+					{
+						sFileName.swap(sFileNameFromFile);
+					}
+				}
+				break;
+			case kClassIdTransform_4:
+			case kClassIdTimeManager_5:
+			case kClassIdAudioManager_11:
+			case kClassIdParticleAnimator_12:
+			case kClassIdInputManager_13:
+			case kClassIdEllipsoidParticleEmitter_15:
+			case kClassIdPhysics2DSettings_19:
+			case kClassIdCamera_20:
+			case kClassIdMeshRenderer_23:
+			case kClassIdParticleRenderer_26:
+			case kClassIdGraphicsSettings_30:
+			case kClassIdMeshFilter_33:
+			case kClassIdQualitySettings_47:
+			case kClassIdRigidbody_54:
+			case kClassIdPhysicsManager_55:
+			case kClassIdMeshCollider_64:
+			case kClassIdBoxCollider_65:
+			case kClassIdTagManager_78:
+			case kClassIdAudioListener_81:
+			case kClassIdAudioSource_82:
+			case kClassIdShaderNameRegistry_94:
+			case kClassIdAnimator_95:
+			case kClassIdTrailRenderer_96:
+			case kClassIdDelayedCallManager_98:
+			case kClassIdTextMesh_102:
+			case kClassIdRenderSettings_104:
+			case kClassIdLight_108:
+			case kClassIdAnimation_111:
+			case kClassIdMonoManager_116:
+			case kClassIdLineRenderer_120:
+			case kClassIdNavMeshProjectSettings_126:
+			case kClassIdPlayerSettings_129:
+			case kClassIdGUITexture_131:
+			case kClassIdSphereCollider_135:
+			case kClassIdCapsuleCollider_136:
+			case kClassIdSkinnedMeshRenderer_137:
+			case kClassIdBuildSettings_141:
+			case kClassIdResourceManager_147:
+			case kClassIdLightmapSettings_157:
+			case kClassIdAudioReverbZone_167:
+			case kClassIdNavMeshSettings_196:
+			case kClassIdParticleSystem_198:
+			case kClassIdParticleSystemRenderer_199:
+			case kClassIdSpriteRenderer_212:
+			case kClassIdCanvasRenderer_222:
+			case kClassIdCanvas_223:
+			case kClassIdRectTransform_224:
+			case kClassIdCanvasGroup_225:
+			case kClassIdRuntimeInitializeOnLoadManager_300:
+			case kClassIdUnityConnectSettings_310:
+			case kClassIdSpriteMask_331:
+			case kClassIdVFXManager_937362698_0x37DF050A:
+			case kClassIdStreamingManager_1403656975_0x53AA1B0F:
+				break;
+			default:
+				UPrintf(USTR("ERROR: Unknown ClassId %d\n\n"), fileEntry.ClassId);
+				return false;
+			}
+		}
+		if (sExtName.empty())
+		{
+			switch (fileEntry.ClassId)
+			{
+			case kClassIdTexture2D_28:
+				sExtName = "png";
+				break;
+			case kClassIdTextAsset_49:
+				sExtName = "bytes";
+				break;
+			case kClassIdMonoBehaviour_114:
+				sExtName = "mono_behaviour";
+				break;
+			case kClassIdFont_128:
+				sExtName = "ttf";
+				break;
+			case kClassIdAssetBundle_142:
+				sExtName = "bin";
+				break;
+			case kClassIdResourceManager_147:
+				sExtName = "bin";
+				break;
+			case kClassIdSprite_213:
+				sExtName = "sprite";
+				break;
+			default:
+				sExtName = "bin";
+				break;
+			}
+		}
+		if (sFileName.empty())
+		{
+			sFileName.swap(m_vFileEntryName[i]);
+		}
+		m_vFileEntryName[i] = sFileName + "." + sExtName;
+	}
+	CName::GenerateNewNameVector(m_vFileEntryName, m_vFileOutputName, false);
 	return true;
 }
