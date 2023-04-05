@@ -80,6 +80,7 @@ private:
 	bool readContainer();
 	bool mergeContainer(const map<n32, map<n64, string>>& a_mContainerFilePath);
 	bool readName();
+	bool extractFileEntry();
 	static const string s_sCommonString;
 	n64 m_nFileSize;
 	map<string, string> m_mPathRes;

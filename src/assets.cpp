@@ -9,6 +9,7 @@
 #include "Classes/GameObject.h"
 #include "Classes/MonoBehaviour.h"
 #include "Classes/ResourceManager.h"
+#include "Classes/TextAsset.h"
 
 const string CAssets::s_sCommonString = Replace<string>(
 	/*        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F  */ """"""""""""""""""
@@ -293,7 +294,10 @@ bool CAssets::ExtractFile()
 	{
 		return false;
 	}
-	// TODO
+	if (!extractFileEntry())
+	{
+		return false;
+	}
 	return true;
 }
 
@@ -1702,4 +1706,77 @@ bool CAssets::readName()
 	}
 	CName::GenerateNewNameVector(m_vFileEntryName, m_vFileOutputName, false);
 	return true;
+}
+
+bool CAssets::extractFileEntry()
+{
+	bool bResult = true;
+	if (m_nFileEntryCount != 0)
+	{
+		if (!UMakeDir(m_sDirName))
+		{
+			return false;
+		}
+		for (n32 i = 0; i < m_nFileEntryCount; i++)
+		{
+			const SFileEntry& fileEntry = m_vFileEntry[i];
+			switch (fileEntry.ClassId)
+			{
+			case kClassIdTextAsset_49:
+				{
+					string sFileData;
+					sFileData.resize(fileEntry.Size);
+					if (!istringstream::seekg(static_cast<ptrdiff_t>(fileEntry.Offset)).good())
+					{
+						bResult = false;
+						break;
+					}
+					if (!CStream::Read(&*sFileData.begin(), fileEntry.Size).good())
+					{
+						bResult = false;
+						break;
+					}
+					nsu::TextAsset textAsset;
+					textAsset.str(sFileData);
+					sFileData.clear();
+					ShrinkToFit(sFileData);
+					textAsset.SetFileSize(fileEntry.Size);
+					textAsset.SetLittleEndian(m_AssetsHeader.LittleEndian);
+					if (fileEntry.TypeIndex >= 0)
+					{
+						const STypeTreeRoot& root = m_TypeTree.Root[fileEntry.TypeIndex];
+						if (root.ChildCount != 0)
+						{
+							textAsset.SetTypeTreeRoot(&root);
+							textAsset.SetRefTypeTypeTree(&m_RefTypeTypeTree);
+						}
+					}
+					if (!textAsset.ReadScript())
+					{
+						bResult = false;
+						break;
+					}
+					n64 nPos = textAsset.tellg();
+					if (nPos != fileEntry.Size)
+					{
+						bResult = false;
+						break;
+					}
+					UString sFileName = m_sDirName + USTR("/") + U8ToU(m_vFileOutputName[i]);
+					FILE* fp = UFopen(sFileName, USTR("wb"));
+					if (fp == nullptr)
+					{
+						bResult = false;
+						break;
+					}
+					const string& sScript = textAsset.GetScript();
+					fwrite(sScript.c_str(), 1, sScript.size(), fp);
+					fclose(fp);
+				}
+				break;
+				// TODO
+			}
+		}
+	}
+	return bResult;
 }
