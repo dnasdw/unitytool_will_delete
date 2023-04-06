@@ -1,6 +1,7 @@
 #include "unitytool.h"
 #include "assetbundle.h"
 #include "assets.h"
+#include "generate_script.h"
 
 CUnityTool::SOption CUnityTool::s_Option[] =
 {
@@ -16,6 +17,17 @@ CUnityTool::SOption CUnityTool::s_Option[] =
 	{ USTR("verbose"), USTR('v'), USTR("show the info") },
 	{ USTR("sample"), 0, USTR("show the samples") },
 	{ USTR("help"), USTR('h'), USTR("show this help") },
+	{ nullptr, 0, USTR("\nhelper option:") },
+	{ USTR("generate-bat-script"), 0, USTR("generate bat script for windows") },
+	{ USTR("generate-sh-script"), 0, USTR("generate sh script for non windows") },
+	{ USTR("exe-path"), 0, USTR("the exe path for script") },
+	{ USTR("extract-script-file"), 0, USTR("the file name of extract script") },
+	{ USTR("extract-src-dir"), 0, USTR("the dir name for extract from") },
+	{ USTR("extract-dest-dir"), 0, USTR("the dir name for extract to") },
+	{ USTR("create-script-file"), 0, USTR("the file name of create script") },
+	{ USTR("create-src-dir"), 0, USTR("the dir name for create from") },
+	{ USTR("create-dest-dir"), 0, USTR("the dir name for create to") },
+	{ USTR("pattern-file"), 0, USTR("the file name pattern for extract from") },
 	{ nullptr, 0, nullptr }
 };
 
@@ -24,6 +36,7 @@ CUnityTool::CUnityTool()
 	, m_bUnite(false)
 	, m_bSplit(false)
 	, m_bVerbose(false)
+	, m_bGenerateBat(true)
 	, m_eFileType(kFileTypeUnknown)
 {
 }
@@ -100,7 +113,7 @@ int CUnityTool::CheckOptions()
 		UPrintf(USTR("ERROR: nothing to do\n\n"));
 		return 1;
 	}
-	if (m_eAction != kActionSample && m_eAction != kActionHelp)
+	if (m_eAction != kActionGenerateScript && m_eAction != kActionSample && m_eAction != kActionHelp)
 	{
 		if (m_sFileName.empty())
 		{
@@ -129,6 +142,50 @@ int CUnityTool::CheckOptions()
 				UPrintf(USTR("ERROR: %") PRIUS USTR("\n\n"), m_sMessage.c_str());
 				return 1;
 			}
+		}
+	}
+	if (m_eAction == kActionGenerateScript)
+	{
+		if (m_sExePath.empty())
+		{
+			UPrintf(USTR("ERROR: no --exe-path option\n\n"));
+			return 1;
+		}
+		if (m_sExtractScriptFileName.empty() && m_sCreateScriptFileName.empty())
+		{
+			UPrintf(USTR("ERROR: no --extract-script-file or --create-script-file option\n\n"));
+			return 1;
+		}
+		if (m_sExtractSrcDirName.empty())
+		{
+			UPrintf(USTR("ERROR: no --extract-src-dir option\n\n"));
+			return 1;
+		}
+		if (!m_sExtractScriptFileName.empty())
+		{
+			if (m_sExtractDestDirName.empty())
+			{
+				UPrintf(USTR("ERROR: no --extract-dest-dir option\n\n"));
+				return 1;
+			}
+		}
+		if (!m_sCreateScriptFileName.empty())
+		{
+			if (m_sCreateSrcDirName.empty())
+			{
+				UPrintf(USTR("ERROR: no --create-src-dir option\n\n"));
+				return 1;
+			}
+			if (m_sCreateDestDirName.empty())
+			{
+				UPrintf(USTR("ERROR: no --create-dest-dir option\n\n"));
+				return 1;
+			}
+		}
+		if (m_sPatternFileName.empty())
+		{
+			UPrintf(USTR("ERROR: no --pattern-file option\n\n"));
+			return 1;
 		}
 	}
 	return 0;
@@ -184,6 +241,14 @@ int CUnityTool::Action()
 		if (!createFile())
 		{
 			UPrintf(USTR("ERROR: create file failed\n\n"));
+			return 1;
+		}
+	}
+	if (m_eAction == kActionGenerateScript)
+	{
+		if (!generateScriptFile())
+		{
+			UPrintf(USTR("ERROR: generate script failed\n\n"));
 			return 1;
 		}
 	}
@@ -288,6 +353,94 @@ CUnityTool::EParseOptionReturn CUnityTool::parseOptions(const UChar* a_pName, in
 	else if (UCscmp(a_pName, USTR("help")) == 0)
 	{
 		m_eAction = kActionHelp;
+	}
+	else if (UCscmp(a_pName, USTR("generate-bat-script")) == 0)
+	{
+		if (m_eAction == kActionNone)
+		{
+			m_eAction = kActionGenerateScript;
+			m_bGenerateBat = true;
+		}
+		else if (m_eAction != kActionHelp && !(m_eAction == kActionGenerateScript && m_bGenerateBat))
+		{
+			return kParseOptionReturnOptionConflict;
+		}
+	}
+	else if (UCscmp(a_pName, USTR("generate-sh-script")) == 0)
+	{
+		if (m_eAction == kActionNone)
+		{
+			m_eAction = kActionGenerateScript;
+			m_bGenerateBat = false;
+		}
+		else if (m_eAction != kActionHelp && !(m_eAction == kActionGenerateScript && !m_bGenerateBat))
+		{
+			return kParseOptionReturnOptionConflict;
+		}
+	}
+	else if (UCscmp(a_pName, USTR("exe-path")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sExePath = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("extract-script-file")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sExtractScriptFileName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("extract-src-dir")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sExtractSrcDirName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("extract-dest-dir")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sExtractDestDirName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("create-script-file")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sCreateScriptFileName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("create-src-dir")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sCreateSrcDirName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("create-dest-dir")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sCreateDestDirName = a_pArgv[++a_nIndex];
+	}
+	else if (UCscmp(a_pName, USTR("pattern-file")) == 0)
+	{
+		if (a_nIndex + 1 >= a_nArgc)
+		{
+			return kParseOptionReturnNoArgument;
+		}
+		m_sPatternFileName = a_pArgv[++a_nIndex];
 	}
 	return kParseOptionReturnSuccess;
 }
@@ -418,6 +571,22 @@ bool CUnityTool::createFile()
 		fclose(fpTarget);
 	}
 	return bResult;
+}
+
+bool CUnityTool::generateScriptFile()
+{
+	CGenerateScript generateScript;
+	generateScript.SetVerbose(m_bVerbose);
+	generateScript.SetGenerateBat(m_bGenerateBat);
+	generateScript.SetExePath(m_sExePath);
+	generateScript.SetExtractScriptFileName(m_sExtractScriptFileName);
+	generateScript.SetExtractSrcDirName(m_sExtractSrcDirName);
+	generateScript.SetExtractDestDirName(m_sExtractDestDirName);
+	generateScript.SetCreateScriptFileName(m_sCreateScriptFileName);
+	generateScript.SetCreateSrcDirName(m_sCreateSrcDirName);
+	generateScript.SetCreateDestDirName(m_sCreateDestDirName);
+	generateScript.SetPatternFileName(m_sPatternFileName);
+	return generateScript.GenerateScript();
 }
 
 int CUnityTool::sample()

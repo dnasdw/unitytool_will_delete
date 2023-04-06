@@ -1,0 +1,7 @@
+// regex: ECMAScript grammar and case insensitive
+unity default resources$
+unity_builtin_extra$
+[0-9a-f]{32}$
+globalgamemanagers(\.assets)*$
+level\d+$
+.*\.assets(\.split0)*$

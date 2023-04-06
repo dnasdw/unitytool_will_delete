@@ -18,6 +18,7 @@ public:
 		kActionNone,
 		kActionExtract,
 		kActionCreate,
+		kActionGenerateScript,
 		kActionSample,
 		kActionHelp
 	};
@@ -46,6 +47,7 @@ private:
 	bool checkFileType();
 	bool extractFile();
 	bool createFile();
+	bool generateScriptFile();
 	int sample();
 	EAction m_eAction;
 	UString m_sFileName;
@@ -56,6 +58,15 @@ private:
 	bool m_bUnite;
 	bool m_bSplit;
 	bool m_bVerbose;
+	bool m_bGenerateBat;
+	UString m_sExePath;
+	UString m_sExtractScriptFileName;
+	UString m_sExtractSrcDirName;
+	UString m_sExtractDestDirName;
+	UString m_sCreateScriptFileName;
+	UString m_sCreateSrcDirName;
+	UString m_sCreateDestDirName;
+	UString m_sPatternFileName;
 	UString m_sMessage;
 	EFileType m_eFileType;
 };
